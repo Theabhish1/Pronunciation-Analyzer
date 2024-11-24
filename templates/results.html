@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech Recognition Results</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <a class="navbar-brand" href="#">Speech Analyzer</a>
+    </nav>
+
+    <div class="container mt-4">
+        <h1>Speech Recognition Results</h1>
+        <p><strong>Recognized Text:</strong> {{ text }}</p>
+        <p><strong>Number of Mistakes:</strong> {{ mistakes }}</p>
+        <p><strong>Mistake Words:</strong> {{ ', '.join(mistake_words) if mistake_words else 'None' }}</p>
+
+        <p>Want to record more? Click the button below!</p>
+        <button id="recordButton" class="btn btn-primary" onclick="startRecording()">Record Again</button>
+    </div>
+
+    <script>
+        function startRecording() {
+            const recordButton = document.getElementById("recordButton");
+
+            // Update button to indicate recording is in progress
+            recordButton.disabled = true;
+            recordButton.innerText = "Recording...";
+            recordButton.classList.remove("btn-primary");
+            recordButton.classList.add("btn-secondary");
+
+            // Access microphone
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(function (stream) {
+                    const mediaRecorder = new MediaRecorder(stream);
+                    const chunks = []; // Store audio chunks
+
+                    mediaRecorder.ondataavailable = function (event) {
+                        chunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = function () {
+                        const audioBlob = new Blob(chunks, { type: "audio/webm" });
+
+                        // Convert audio to Base64 and send to backend
+                        const reader = new FileReader();
+                        reader.readAsDataURL(audioBlob);
+                        reader.onloadend = function () {
+                            const base64Audio = reader.result.split(",")[1];
+                            const formData = new FormData();
+                            formData.append("audio", base64Audio);
+
+                            // Send the audio to the backend
+                            fetch("/recognize", {
+                                method: "POST",
+                                body: formData,
+                            })
+                                .then((response) => response.text())
+                                .then((html) => {
+                                    document.body.innerHTML = html;
+                                })
+                                .catch((err) => {
+                                    console.error("Error:", err);
+                                });
+                        };
+
+                        // Reset button state
+                        recordButton.disabled = false;
+                        recordButton.innerText = "Record Again";
+                        recordButton.classList.remove("btn-secondary");
+                        recordButton.classList.add("btn-primary");
+                    };
+
+                    // Start recording and stop after 5 seconds
+                    mediaRecorder.start();
+                    setTimeout(() => mediaRecorder.stop(), 5000);
+                })
+                .catch(function (err) {
+                    console.error("Microphone error:", err);
+                    alert("Microphone access denied.");
+                });
+        }
+    </script>
+</body>
+</html>
